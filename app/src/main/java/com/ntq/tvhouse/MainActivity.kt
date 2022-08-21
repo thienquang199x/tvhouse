@@ -7,7 +7,6 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -15,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,13 +38,20 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout
-import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.ui.StyledPlayerView
+import com.google.android.exoplayer2.ui.StyledPlayerView.SHOW_BUFFERING_WHEN_PLAYING
 import com.google.android.exoplayer2.upstream.DataSource
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
 import com.ntq.tvhouse.entities.Channel
 import com.ntq.tvhouse.ui.theme.TVHouseTheme
-
+import com.skydoves.landscapist.coil.CoilImage
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import java.io.File
+import java.net.URL
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     private lateinit var navController:NavHostController
@@ -91,28 +98,61 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        finishAffinity()
+    }
 }
 
 @Composable
 fun HomeScreen(onNavigateToFriends: (channel:Channel) -> Unit) {
-    val channels = listOf(Channel("HTV2", R.drawable.img_htv2, "https://drm-livecdn.hplus.com.vn/CDN-FPT02/HTV2-HD-1080p/playlist.m3u8"), Channel("HTV3", R.drawable.img_htv3, "https://livecdn.fptplay.net/sdb/htv3_2000.stream/chunklist.m3u8"), Channel("HTV4", R.drawable.img_htv4, "https://livecdn.fptplay.net/sdb/htv4_hls.smil/chunklist_b2500000.m3u8"))
+    val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    val channelFile = File(LocalContext.current.filesDir.absolutePath, "channel_config.json")
+    try {
+        if (channelFile.exists()){
+            channelFile.delete()
+        }
+        val latch = CountDownLatch(1)
+        Thread{
+            channelFile.writeBytes(URL("https://raw.githubusercontent.com/thienquang199x/tvhouse/main/channel_config.json").openStream().readBytes())
+            latch.countDown()
+        }.start()
+        latch.await(1, TimeUnit.MINUTES)
+    } catch (t:Throwable){
+
+    }
+    val type =
+        Types.newParameterizedType(List::class.java, Channel::class.java)
+    val adapter = moshi.adapter<List<Channel>>(type)
+    val channels = arrayListOf<Channel>()
+    if (channelFile.exists()){
+        channels.addAll(adapter.fromJson(channelFile.readText()) ?: arrayListOf())
+    } else {
+        channels.addAll(adapter.fromJson(String(LocalContext.current.assets.open("channel_config.json").readBytes()))  ?: arrayListOf())
+    }
     Box() {
         Image(painter = painterResource(id = R.drawable.img_bg), contentDescription = null, contentScale = ContentScale.FillWidth)
         Column(modifier = Modifier.padding(20.dp)) {
-            Text(text = "Kênh truyền hình", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Kênh truyền hình", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(10.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ){
                 items(channels){ channel ->
                     Card(modifier = Modifier
-                        .width(100.dp)
+                        .width(200.dp)
                         .aspectRatio(728f / 409)
-                        .background(color = Color.White)
+                        .background(color = Color.Transparent)
                         .clickable {
                             onNavigateToFriends(channel)
-                        }, elevation = 14.dp) {
-                        Image(painter = painterResource(id = channel.icon), contentDescription = null)
+                        },
+                        shape = RoundedCornerShape(10.dp)) {
+                        CoilImage(imageModel = channel.icon, contentScale = ContentScale.Crop, failure = {
+                            Text(
+                                text = channel.name, color = Color.Gray, fontWeight = FontWeight.ExtraBold, fontSize = 30.sp, modifier = Modifier.align(Alignment.Center)
+                            )
+                        })
                     }
                 }
             }
@@ -149,6 +189,7 @@ fun PlayerScreen(channelUrl:String){
                 StyledPlayerView(context).apply {
                     player = mExoPlayer
                     useController = false
+                    setShowBuffering(SHOW_BUFFERING_WHEN_PLAYING)
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
                 }
             })

@@ -1,3 +1,5 @@
 package com.ntq.tvhouse.entities
 
-data class Channel(val name:String, val icon:Int, val url:String)
+import com.squareup.moshi.Json
+
+data class Channel(@Json(name = "name") val name:String,@Json(name = "icon") val icon:String,@Json(name = "url") val url:String)
