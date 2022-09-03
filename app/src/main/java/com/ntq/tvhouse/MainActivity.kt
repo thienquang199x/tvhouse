@@ -138,7 +138,8 @@ fun HomeScreen(onNavigateToFriends: (channel:Channel) -> Unit) {
             Text(text = "Kênh truyền hình", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(10.dp))
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                userScrollEnabled = true
             ){
                 items(channels){ channel ->
                     var padding by remember { mutableStateOf(0.dp) }
